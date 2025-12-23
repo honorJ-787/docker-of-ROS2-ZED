@@ -1,0 +1,30 @@
+services:
+  zed:
+    build: .
+    image: zed_ros2_jazzy_zed:cuda13_u24
+    container_name: zed_ros2
+
+    network_mode: host
+    privileged: true
+    gpus: all
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev:/dev
+      - /dev/shm:/dev/shm
+      - zed_ws_build:/root/ros2_ws/build
+      - zed_ws_install:/root/ros2_ws/install
+      - zed_ws_log:/root/ros2_ws/log
+
+volumes:
+  zed_ros2_ws:
+  zed_ws_build:
+  zed_ws_install:
+  zed_ws_log:
