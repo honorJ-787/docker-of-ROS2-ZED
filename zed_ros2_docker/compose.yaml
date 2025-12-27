@@ -1,30 +1,35 @@
 services:
-  zed:
-    build: .
-    image: zed_ros2_jazzy_zed:cuda13_u24
-    container_name: zed_ros2
+  ros2zed:
+    container_name: ros2zed
+    image: ros2zed:jazzy-zed
+    build:
+      context: .
+      dockerfile: Dockerfile
 
-    network_mode: host
-    privileged: true
+    # Stereolabs 官方运行示例里强调：GPU + privileged + X11 + /dev + NVIDIA_DRIVER_CAPABILITIES
+    # :contentReference[oaicite:3]{index=3}
     gpus: all
+    privileged: true
+    network_mode: "host"
+    ipc: "host"
+    pid: "host"
 
     environment:
-      - ROS_DOMAIN_ID=0
       - DISPLAY=${DISPLAY}
-      - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=0
+      - QT_X11_NO_MITSHM=1
 
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - /dev/bus/usb:/dev/bus/usb
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev:/dev
       - /dev/shm:/dev/shm
-      - zed_ws_build:/root/ros2_ws/build
-      - zed_ws_install:/root/ros2_ws/install
-      - zed_ws_log:/root/ros2_ws/log
 
-volumes:
-  zed_ros2_ws:
-  zed_ws_build:
-  zed_ws_install:
-  zed_ws_log:
+      # 可选：持久化 ZED resources/settings（官方常见用法）
+      - /usr/local/zed/resources:/usr/local/zed/resources:rw
+      - /usr/local/zed/settings:/usr/local/zed/settings:rw
+
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    command: ["bash", "-lc", "sleep infinity"]
