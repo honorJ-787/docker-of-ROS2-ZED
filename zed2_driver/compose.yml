@@ -1,0 +1,36 @@
+services:
+  ros2zed:
+    container_name: zed2_driver
+    image: zed2_driver:jazzy-zed
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Stereolabs 官方运行示例里强调：GPU + privileged + X11 + /dev + NVIDIA_DRIVER_CAPABILITIES
+    # :contentReference[oaicite:3]{index=3}
+    gpus: all
+    privileged: true
+    network_mode: "host"
+    ipc: "host"
+    pid: "host"
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - QT_X11_NO_MITSHM=1
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+      - /dev/shm:/dev/shm
+
+      # 可选：持久化 ZED resources/settings（官方常见用法）
+      - /usr/local/zed/resources:/usr/local/zed/resources:rw
+      - /usr/local/zed/settings:/usr/local/zed/settings:rw
+
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    command: ["bash", "-lc", "sleep infinity"]
