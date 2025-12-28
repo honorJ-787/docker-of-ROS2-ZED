@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
+# RUN apt-get update && apt-get install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+
 # 1) ROS2 官方：启用 Universe + 安装 ros2-apt-source（用于配置 ROS2 apt 仓库）
 #    （这是 Jazzy 官方推荐流程）
 RUN add-apt-repository universe \
