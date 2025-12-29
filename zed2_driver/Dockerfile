@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+FROM stereolabs/zed:5.1.0-devel-cuda13.0-ubuntu24.04
+
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO=jazzy
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# (A) Base tools + locale
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
+    ca-certificates curl gnupg lsb-release software-properties-common \
+    git build-essential \
+    python3 python3-pip \
+    usbutils \
+ && locale-gen en_US en_US.UTF-8 \
+ && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+ && rm -rf /var/lib/apt/lists/*
+
+# (B) ROS2 apt repository (official recommended: ros2-apt-source)
+RUN add-apt-repository universe \
+ && apt-get update && apt-get install -y --no-install-recommends curl \
+ && export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}') \
+ && curl -L -o /tmp/ros2-apt-source.deb \
+      "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb" \
+ && dpkg -i /tmp/ros2-apt-source.deb \
+ && rm -f /tmp/ros2-apt-source.deb
+
+# (C) Install ROS2 desktop + dev tools + CycloneDDS RMW (关键：必须在 ROS2 源配置好之后再装)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-desktop \
+    ros-dev-tools \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+ && rm -rf /var/lib/apt/lists/*
+
+# (D) Default RMW to CycloneDDS (for communication)
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# (E) rosdep init/update
+RUN rosdep init 2>/dev/null || true && rosdep update
+
+# (F) Clone zed wrapper + interfaces (interfaces provide zed_msgs)
+WORKDIR /root/ros2_ws
+RUN mkdir -p src
+WORKDIR /root/ros2_ws/src
+RUN git clone --recursive --depth 1 https://github.com/stereolabs/zed-ros2-wrapper.git \
+ && git clone --depth 1 https://github.com/stereolabs/zed-ros2-interfaces.git
+
+# (G) rosdep + colcon build (apt-get update)
+WORKDIR /root/ros2_ws
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
+ && apt-get update \
+ && rosdep install --from-paths src --ignore-src -r -y --rosdistro ${ROS_DISTRO} \
+ && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+ && rm -rf /var/lib/apt/lists/*
+
+# (H) Auto-source in shells
+RUN printf '%s\n' \
+  "source /opt/ros/${ROS_DISTRO}/setup.bash" \
+  "[ -f /root/ros2_ws/install/setup.bash ] && source /root/ros2_ws/install/setup.bash" \
+  "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" \
+  >> /etc/bash.bashrc
+
+# (I) Entrypoint (Avoid using heredoc to prevent the previous unterminated heredoc.)
+RUN printf '%s\n' \
+  '#!/bin/bash' \
+  'set -e' \
+  "source /opt/ros/${ROS_DISTRO}/setup.bash" \
+  'if [ -f /root/ros2_ws/install/setup.bash ]; then source /root/ros2_ws/install/setup.bash; fi' \
+  'export RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}' \
+  'exec "$@"' \
+  > /ros_entrypoint.sh \
+ && chmod +x /ros_entrypoint.sh
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]
+
